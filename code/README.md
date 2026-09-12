@@ -107,6 +107,7 @@ evaluation/write_usage_report.py    usage report generator
 evaluation/usage_report.md          final-run token/cost report
 evaluation/tests/                   synthetic tests
 IMPLEMENTATION_NOTES.md             schemas, inferred ground-truth behaviour, assumptions
+ARCHITECTURE.md                     module-by-module architecture and data flow
 ```
 
 ## Known limitations
