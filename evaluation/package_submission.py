@@ -34,6 +34,7 @@ INCLUDE = [
     ("ROADMAP.md", "ROADMAP.md"),
     ("ARCHITECTURE.md", "ARCHITECTURE.md"),
     ("AUDIT_REPORT.md", "AUDIT_REPORT.md"),
+    ("VERIFICATION.md", "VERIFICATION.md"),
     ("evaluation/tests/test_audit.py", "evaluation/tests/test_audit.py"),
 ]
 EXCLUDED_DIRS = {"__pycache__", ".pytest_cache", "dataset", "media", "traces", ".git"}

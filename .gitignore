@@ -5,3 +5,7 @@ __pycache__/
 traces/
 code.zip
 evaluation/usage_run.json
+run_a.csv
+run_b.csv
+samples_out.csv
+ziptest/
