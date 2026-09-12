@@ -1,7 +1,7 @@
 # Verification procedure — Buy or Wait? submission
 
 Run every step from the repository root (`hackerrank-orchestrate-september26`). Each step lists the command,
-what to look for, and the expected value at release tag `submission-3` (commit `ada7910`). No network access or
+what to look for, and the expected value at release tag `submission-4` (commit `1837fb2` + this doc update). No network access or
 API key is needed at any point.
 
 ## 0. Prerequisites and repository state
@@ -15,8 +15,8 @@ only needed for steps 2–3 (`pip install pytest ruff`).
 ```bash
 git status -sb && git log --oneline -1 && git tag -l
 ```
-Expected: clean tree, `main` in sync with `origin/main`, latest commit `ada7910 fix(release): …`, tags
-`submission-1`, `submission-2`, `submission-3`.
+Expected: clean tree, `main` in sync with `origin/main`, latest commit `docs: verification hashes …`, tags
+`submission-1` … `submission-4`.
 
 ```bash
 git diff --stat upstream/main -- dataset
@@ -104,21 +104,21 @@ Expected: three identical hashes (`a47a3441…3f148`). Delete `run_a.csv`, `run_
 ```bash
 python evaluation/package_submission.py
 ```
-Expected: `wrote …\code.zip: 35 files, ~102 KB`.
+Expected: `wrote …\code.zip: 36 files, ~105 KB`.
 
 ```bash
 python evaluation/package_submission.py --list
 ```
 Expected: only `README.md`, `code/**` (main.py, buyorwait/*.py, cache/image_extractions.json), `evaluation/**`
 (scripts, usage_report.md, tests), `IMPLEMENTATION_NOTES.md`, `ARCHITECTURE.md`, `AUDIT_REPORT.md`,
-`ROADMAP.md`, `requirements.txt`, `ruff.toml`. No `dataset/`, `media/`, `output.csv`, traces, caches, secrets.
+`ROADMAP.md`, `VERIFICATION.md`, `requirements.txt`, `ruff.toml`. No `dataset/`, `media/`, `output.csv`, traces, caches, secrets.
 `code/cache/image_extractions.json` is the verified image-evidence store (16 amounts, sha256-keyed, no
 secrets); it is required to reproduce `output.csv`.
 
 ```bash
 sha256sum code.zip
 ```
-Expected: `b89db2d6bb9c7355e0998bf83acbfb224c726ae9ba96bec293e73e62df40adc1`
+Expected: matches the hash recorded in the release tag message (`git show submission-4 | head`).
 
 Reproduce from a clean extraction (any temporary folder):
 
@@ -155,7 +155,7 @@ https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenge
 
 | Upload field | File | sha256 |
 |---|---|---|
-| `code.zip` | `code.zip` | `b89db2d6bb9c7355e0998bf83acbfb224c726ae9ba96bec293e73e62df40adc1` |
+| `code.zip` | `code.zip` | printed by `sha256sum code.zip` after step 8 — the zip contains this file, so the value cannot be embedded here; the release tag message (`git show submission-4`) records the hash of the packaged build |
 | `output.csv` | `output.csv` | `a47a3441f2ae9d7735690d5474f7d69a0b144fcfb05434eaa819435f2f83f148` |
 | `chat_transcript` | `log.txt` | changes with every logged turn — hash it right before uploading |
 
