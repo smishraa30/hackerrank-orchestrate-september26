@@ -1,5 +1,9 @@
-"""Engine configuration. Structural switches are explicit so they can be calibrated
-against the solved samples and documented."""
+"""Engine configuration.
+
+Defaults are the values calibrated against the solved samples (see IMPLEMENTATION_NOTES.md section 5b).
+Switches marked EXPERIMENTAL are alternatives that were evaluated and rejected during calibration; they
+are kept so the comparison in the notes can be reproduced (`python code/main.py --set key=value`).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,10 +20,10 @@ class EngineConfig:
     horizon_mode: str = "hybrid"
     # apply projected recurring occurrences that fall exactly on request_date
     include_request_date: bool = True
-    # amount estimator for variable recurring series: mean | median | last | max | mean3 | trimmed_mean | midrange
+    # amount estimator for variable recurring series: midrange (calibrated) | EXPERIMENTAL: mean, median, last, max, mean3, trimmed_mean
     estimator: str = "midrange"
-    # intraday check: "eod" (end-of-day balances), "debits_first" (all forecast debits before credits) or
-    # "interval_first" (interval-cadence and pending debits before credits; monthly debits after credits)
+    # intraday check: "eod" (end-of-day balances, calibrated) | EXPERIMENTAL: "debits_first" (all forecast debits before
+    # credits), "interval_first" (interval-cadence and pending debits before credits; monthly debits after credits)
     intraday: str = "eod"
     # income is projected only when the amount is fixed (identical recent occurrences)
     income_requires_fixed_amount: bool = True
@@ -35,10 +39,11 @@ class EngineConfig:
     interval_inactive_factor: float = 2.0
     # interval-series anchor: "last" (last occurrence + k*interval), "request" (request_date + k*interval, k>=1),
     # "request0" (request_date + k*interval, k>=0)
-    # "shift": replay the history phase shifted by `history_shift_days` (first occurrence + shift + k*interval)
+    # "shift": replay the history phase shifted by `history_shift_days` (first occurrence + shift + k*interval; calibrated)
+    # EXPERIMENTAL: "last" (last occurrence + k*interval), "request" (request_date + k*interval, k>=1), "request0" (k>=0)
     interval_anchor: str = "shift"
     history_shift_days: int = 180
-    # cadence estimate for interval series: "median_gap" | "span_n" ((last-first)/n) | "span_n1" ((last-first)/(n-1))
+    # cadence estimate for interval series: "median_gap" (calibrated) | EXPERIMENTAL: "span_n" ((last-first)/n), "span_n1"
     interval_cadence: str = "median_gap"
     # optional remapping of detected interval lengths (e.g. {21: 14}); empty = keep detected cadence
     interval_remap: dict = field(default_factory=dict)
@@ -51,7 +56,7 @@ class EngineConfig:
     # outlier trimming for amount estimation (ratio to median)
     outlier_hi: float = 2.5
     outlier_lo: float = 0.35
-    # safety horizon for a payment on day D: "window" (every later day of the 90-day window) or
+    # safety horizon for a payment on day D: "window" (every later day of the window, calibrated) | EXPERIMENTAL:
     # "pay_period" (from D until the day before the next projected income; only D when no income follows)
     earliest_rule: str = "window"
     plan_rule: str = "window"

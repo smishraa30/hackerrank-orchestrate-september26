@@ -65,6 +65,61 @@ def parse_changes(text: str):
     return out
 
 
+def _num_tokens(text: str) -> set[str]:
+    """Numbers mentioned in an explanation, normalised (no thousands separators, no trailing .00)."""
+    out = set()
+    for tok in re.findall(r"\d[\d,]*(?:\.\d+)?", text):
+        t = tok.replace(",", "")
+        try:
+            out.add(str(Decimal(t).quantize(CENT).normalize()))
+        except InvalidOperation:
+            continue
+    return out
+
+
+def _norm(x: Decimal) -> str:
+    return str(Decimal(x).quantize(CENT).normalize())
+
+
+def explanation_consistency(d: dict, req, prof) -> list[str]:
+    """The explanation must be consistent with the structured fields it justifies."""
+    text = d["decision_explanation"]
+    low = text.lower()
+    nums = _num_tokens(text)
+    method = d["recommended_payment_method"]
+    errs = []
+    if len(text) < 40:
+        errs.append("explanation too short to be useful")
+    if method == "not_recommended":
+        if not any(w in low for w in ("do not", "not safe", "cannot", "no payment option")):
+            errs.append("not_recommended explanation must say the payment should not proceed")
+    if method == "wait":
+        try:
+            plan_date = date.fromisoformat(d["payment_plan"].split(":")[0])
+            if str(plan_date.day) not in text or plan_date.strftime("%B") not in text:
+                errs.append("wait explanation must mention the payment date")
+        except ValueError:
+            pass
+        if "wait" not in low and "in full on" not in low:
+            errs.append("wait explanation must say to wait / pay later")
+    if method == "installments" and "installment" not in low:
+        errs.append("installments explanation must mention installments")
+    if method == "partial_payment":
+        parts = d["payment_plan"].split("|")
+        for part in parts:
+            amt = part.split(":")[1]
+            if _norm(Decimal(amt)) not in nums:
+                errs.append(f"partial explanation must quote the payment amount {amt}")
+    if method == "full_payment" and _norm(req.requested_amount) not in nums:
+        errs.append("full_payment explanation must quote the requested amount")
+    if d["spending_changes_needed"] != "none" and not any(w in low for w in ("stop", "reduce")):
+        errs.append("explanation must mention the required spending change")
+    if prof is not None and _norm(prof.minimum_balance_to_keep) not in nums and not (
+            method == "not_recommended" and ("safely" in low or "90 days" in low)):
+        errs.append("explanation must state the minimum balance constraint")
+    return errs
+
+
 def validate(output_path: str, dataset_dir: str, requests_path: str | None = None, simulate: bool = True) -> list[str]:
     errors: list[str] = []
     ds = load_dataset(dataset_dir)
@@ -150,6 +205,7 @@ def validate(output_path: str, dataset_dir: str, requests_path: str | None = Non
         if not d["decision_explanation"].strip():
             errors.append(f"{pre}: empty decision_explanation")
         status, method = d["affordability_status"], d["recommended_payment_method"]
+        errors.extend(f"{pre}: {e}" for e in explanation_consistency(d, req, prof))
         if plan is None or changes is None:
             continue
         # chronological order, dates inside forecast, amounts positive

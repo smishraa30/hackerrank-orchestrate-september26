@@ -39,6 +39,7 @@ python code/main.py --requests dataset/sample_requests.csv --output samples_out.
 python code/main.py --trace traces/                                                  # one JSON trace per request
 python code/main.py --usage evaluation/usage_run.json                                # token/cost summary (JSON)
 python code/main.py --dataset /path/to/dataset --output /path/to/output.csv          # other locations
+python code/main.py --set intraday=debits_first --set horizon_days=120                # override any EngineConfig field
 ```
 
 ## Evaluate

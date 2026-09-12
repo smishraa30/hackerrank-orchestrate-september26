@@ -40,14 +40,14 @@ Status legend: [x] done · [ ] open · [~] partial
 - [x] Sample regression guard: fail if sample metrics drop below current thresholds
 - [x] Graceful degradation tests: missing image file, missing rate pair, user with no history, deadline beyond horizon, empty messages/images files
 
-## Phase 4 — Code quality (open)
-- [ ] Remove or clearly mark exploratory config switches (`interval_anchor` variants, `span_n`, `interval_first`) that are not the calibrated defaults
+## Phase 4 — Code quality (done)
+- [x] Remove or clearly mark exploratory config switches (`interval_anchor` variants, `span_n`, `interval_first`) that are not the calibrated defaults
 - [x] Lint (ruff/flake8) + type check pass; docstrings for public functions
-- [ ] CLI `--config key=value` overrides and `--version`; structured per-request assumption log (already in traces) surfaced as a summary file
-- [ ] Explanation consistency check in the validator (numbers quoted in the explanation match the output fields)
+- [x] CLI `--set key=value` overrides and `--version`; structured per-request assumption log (already in traces) surfaced as a summary file
+- [x] Explanation consistency check in the validator (numbers quoted in the explanation match the output fields)
 
 ## Phase 5 — Decision-policy review (open, judgement calls)
-- [ ] Instalments + spending changes (23 rows) — kept; revisit only with new evidence
+- [x] Instalments + spending changes (23 rows) — kept (user decision)
 - [ ] `wait` plans completing after the deadline (2 rows) → `affordable_later` vs `not_affordable`
 - [ ] Telecom bill image: 822.05 (post-due-date) vs 704.05
 - [ ] "Temporary"/"reduced" pay kept for all future payrolls vs reverting after the next payroll

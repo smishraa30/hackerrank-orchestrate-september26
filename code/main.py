@@ -36,6 +36,9 @@ def parse_args(argv=None):
     p.add_argument("--usage", default=None, help="write a JSON usage summary (model calls/tokens) to this path")
     p.add_argument("--limit", type=int, default=None, help="only process the first N requests")
     p.add_argument("--estimator", default=None, help="override variable-amount estimator (mean|median|last|max|mean3|midrange|trimmed_mean)")
+    p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                   help="override any EngineConfig field (repeatable), e.g. --set horizon_days=120 --set intraday=debits_first")
+    p.add_argument("--version", action="version", version="buyorwait " + __import__("buyorwait").__version__)
     p.add_argument("--quiet", action="store_true")
     return p.parse_args(argv)
 
@@ -68,6 +71,24 @@ def main(argv=None) -> int:
     cfg = EngineConfig()
     if args.estimator:
         cfg.estimator = args.estimator
+    for item in args.set:
+        key, _, value = item.partition("=")
+        if not hasattr(cfg, key):
+            print(f"unknown config field: {key}", file=sys.stderr)
+            return 2
+        current = getattr(cfg, key)
+        if isinstance(current, bool):
+            setattr(cfg, key, value.lower() in ("1", "true", "yes"))
+        elif isinstance(current, int):
+            setattr(cfg, key, int(value))
+        elif isinstance(current, float):
+            setattr(cfg, key, float(value))
+        elif isinstance(current, tuple):
+            setattr(cfg, key, tuple(v for v in value.split(",") if v))
+        elif isinstance(current, dict):
+            setattr(cfg, key, json.loads(value) if value else {})
+        else:
+            setattr(cfg, key, value)
     engine = Engine(ds, cfg)
     decisions = []
     if args.trace:
