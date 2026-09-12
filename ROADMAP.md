@@ -59,8 +59,8 @@ Status legend: [x] done · [ ] open · [~] partial
 - [ ] One-time arrears adjustments not projected (conservative)
 - [ ] Optional LLM polish of `decision_explanation` behind an env flag (judged field) — only if cost/benefit is clear
 
-## Phase 6 — Submission (open)
+## Phase 6 — Submission (artifacts final; upload pending)
 - [x] Rebuild `code.zip` after any code change (`python evaluation/package_submission.py`) and re-run validator + tests (done at 221cc94)
 - [ ] Upload `code.zip`, `output.csv`, `log.txt` (chat_transcript) at
-      https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait/submission
+      https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait/submission (manual step — artifacts final at tag `submission-final`)
 - [x] Final commit + push; tag the submitted revision (`submission-1`)

@@ -1,9 +1,9 @@
 # Token usage and cost report — final full-dataset run
 
-- Run timestamp: 2026-09-13T03:01:33+05:30
+- Run timestamp: 2026-09-13T03:26:32+05:30
 - Dataset: `dataset` (250 requests in `requests.csv`)
 - Output: `output.csv` (250 rows)
-- Elapsed: 1.36 s (single process, deterministic)
+- Elapsed: 0.82 s (single process, deterministic)
 
 ## Model usage (LLM / VLM API calls)
 
