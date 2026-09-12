@@ -29,20 +29,20 @@ Status legend: [x] done · [ ] open · [~] partial
 - [x] Decision gate 3 report; `output.csv` (250 rows); `log.txt` transcript (append-only)
 - [x] Git: committed, merged to `main`, pushed to github.com/smishraa30/hackerrank-orchestrate-september26
 
-## Phase 3 — Hardening & testing (open)
-- [ ] Message-parser unit tests: one test per scenario template, EN + ID variants, date/amount extraction, unclassified fallback
-- [ ] Recurrence-detection tests: two sub-series per category, missed occurrence → inactive, extra one-off inside a cadence, "Final employer payroll"
-- [ ] Horizon/phase tests: 180-day replay, monthly cut-off at month M+2, interval items to R+90, payday funding order
-- [ ] Ranking tests: every tie-breaker in isolation (deadline, changes, total, start, count, option id); partial vs wait; instalment vs wait
-- [ ] Spending-change tests: ≤3 changes, stop/reduce mutual exclusion, protected/non-permitted categories, `reduce_to` = minimum_allowed_amount, latest occurrence event id
-- [ ] Validator self-tests: fixtures with deliberate violations must be rejected (bad header, duplicate id, bad grammar, non-option instalment, illegal change, unsafe plan)
-- [ ] Property tests: amount_safe always in bounds; every recommended plan re-simulates safe; higher balance ⇒ amount_safe not lower; two runs byte-identical
-- [ ] Sample regression guard: fail if sample metrics drop below current thresholds
-- [ ] Graceful degradation tests: missing image file, missing rate pair, user with no history, deadline beyond horizon, empty messages/images files
+## Phase 3 — Hardening & testing (done: 52 tests)
+- [x] Message-parser unit tests: one test per scenario template, EN + ID variants, date/amount extraction, unclassified fallback
+- [x] Recurrence-detection tests: two sub-series per category, missed occurrence → inactive, extra one-off inside a cadence, "Final employer payroll"
+- [x] Horizon/phase tests: 180-day replay, monthly cut-off at month M+2, interval items to R+90, payday funding order
+- [x] Ranking tests: every tie-breaker in isolation (deadline, changes, total, start, count, option id); partial vs wait; instalment vs wait
+- [x] Spending-change tests: ≤3 changes, stop/reduce mutual exclusion, protected/non-permitted categories, `reduce_to` = minimum_allowed_amount, latest occurrence event id
+- [x] Validator self-tests: fixtures with deliberate violations must be rejected (bad header, duplicate id, bad grammar, non-option instalment, illegal change, unsafe plan)
+- [x] Property tests: amount_safe always in bounds; every recommended plan re-simulates safe; higher balance ⇒ amount_safe not lower; two runs byte-identical
+- [x] Sample regression guard: fail if sample metrics drop below current thresholds
+- [x] Graceful degradation tests: missing image file, missing rate pair, user with no history, deadline beyond horizon, empty messages/images files
 
 ## Phase 4 — Code quality (open)
 - [ ] Remove or clearly mark exploratory config switches (`interval_anchor` variants, `span_n`, `interval_first`) that are not the calibrated defaults
-- [ ] Lint (ruff/flake8) + type check pass; docstrings for public functions
+- [x] Lint (ruff/flake8) + type check pass; docstrings for public functions
 - [ ] CLI `--config key=value` overrides and `--version`; structured per-request assumption log (already in traces) surfaced as a summary file
 - [ ] Explanation consistency check in the validator (numbers quoted in the explanation match the output fields)
 

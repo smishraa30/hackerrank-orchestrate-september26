@@ -155,7 +155,11 @@ class LedgerBuilder:
                     notes.append(f"{e.event_id}: blank amount without image; row excluded (never zero)")
             if e.amount is not None:
                 if e.currency != home:
-                    e.home_amount, fxp = self.rates.convert(e.amount, _sday(e), e.currency, home)
+                    try:
+                        e.home_amount, fxp = self.rates.convert(e.amount, _sday(e), e.currency, home)
+                    except KeyError:
+                        notes.append(f"{e.event_id}: no supplied exchange rate for {e.currency}->{home}; row excluded (never guessed)")
+                        continue
                     prov["fx"].append({"event_id": e.event_id, "from": e.currency, "to": home, "date": str(_sday(e)),
                                        "rate": fxp, "home_amount": str(e.home_amount)})
                 else:
@@ -405,7 +409,11 @@ class LedgerBuilder:
         def in_series_ccy(amount: Decimal, ccy: str, s: Series, day: date) -> Decimal:
             if ccy == s.currency:
                 return amount
-            conv, _ = self.rates.convert(amount, day, ccy, s.currency)
+            try:
+                conv, _ = self.rates.convert(amount, day, ccy, s.currency)
+            except KeyError:
+                s.notes.append(f"message amount {ccy} {amount} could not be converted (no rate); history amount kept")
+                return s.amount
             s.notes.append(f"message amount {ccy} {amount} converted to {s.currency} {conv} at {day}")
             return conv
 
@@ -451,9 +459,14 @@ class LedgerBuilder:
                 notes.append(f"{a.message_id}: {a.note}")
             elif a.kind == "one_off_income" and a.amount is not None and a.day is not None:
                 if R <= a.day <= end:
-                    amt_home, _ = self.rates.convert(a.amount, a.day, a.currency or home, home)
-                    one_offs.append(CashItem(a.day, amt_home, "message", f"approved invoice ({a.message_id})",
-                                             "income|invoice|credit", None))
+                    try:
+                        amt_home, _ = self.rates.convert(a.amount, a.day, a.currency or home, home)
+                    except KeyError:
+                        notes.append(f"{a.message_id}: approved invoice in {a.currency} has no supplied rate; not counted")
+                        amt_home = None
+                    if amt_home is not None:
+                        one_offs.append(CashItem(a.day, amt_home, "message", f"approved invoice ({a.message_id})",
+                                                 "income|invoice|credit", None))
                 notes.append(f"{a.message_id}: {a.note}")
             elif a.kind == "rent_increase" and a.factor is not None:
                 for s in series:

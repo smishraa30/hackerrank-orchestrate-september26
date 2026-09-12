@@ -81,7 +81,12 @@ class PaymentOption:
 
     @property
     def option_number(self) -> int:
-        return int(self.payment_option_id.rsplit("_", 1)[1])
+        """Numeric part of the option id (lowest id is the final ranking tie-breaker); ids without a
+        trailing number sort last and are then ordered by their text."""
+        import re
+
+        m = re.search(r"(\d+)\s*$", self.payment_option_id)
+        return int(m.group(1)) if m else 10**9
 
     def schedule(self) -> list[tuple[date, Decimal]]:
         from datetime import timedelta

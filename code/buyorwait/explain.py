@@ -5,14 +5,13 @@ date, the next confirmed income, reserved one-off debits, the plan chosen and wh
 """
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 from .config import EngineConfig
 from .forecast import balance_path, build_items
 from .ledger import Ledger
-from .models import Plan, Request, SpendingChange
+from .models import Request, SpendingChange
 from .planner import Analysis
 from .render import fmt_date_long, fmt_money
 
@@ -126,7 +125,7 @@ def explain(req: Request, ledger: Ledger, an: Analysis, cfg: Optional[EngineConf
         total = fmt_money(plan.total_paid, ccy)
         prefix = (f"{_changes_sentence(ledger, plan.changes, ccy)}, then use" if plan.changes else "Use")
         why = (f"Paying {requested} today is not safe (only {safe} is available above the {mn} minimum)"
-               if an.amount_safe < req.requested_amount else f"You do not accept a single full payment")
+               if an.amount_safe < req.requested_amount else "You do not accept a single full payment")
         covered = f"the installments are covered by {income}" if f["next_income"] is not None else "the spread-out installments fit the existing balance"
         return f"{prefix} {n} installments of {amt}, starting {start} (total {total}). {why}; {covered} and keep at least {mn} available."
 

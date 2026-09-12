@@ -8,8 +8,7 @@ from decimal import Decimal
 from typing import Optional
 
 from .config import EngineConfig
-from .forecast import (amount_safe_today, balance_path, build_items, earliest_full_payment_date, plan_is_safe,
-                       series_occurrences)
+from .forecast import amount_safe_today, balance_path, build_items, earliest_full_payment_date, plan_is_safe, series_occurrences
 from .fx import CENT
 from .ledger import Ledger
 from .models import PaymentOption, Plan, Request, Series, SpendingChange
@@ -35,6 +34,7 @@ def rank_key(p: Plan):
         p.start_date or date.max,
         p.n_payments,
         p.option_number,
+        p.option_id or "",
     )
 
 
@@ -165,7 +165,8 @@ def analyse(req: Request, ledger: Ledger, options: list[PaymentOption], cfg: Eng
                     found = True
             if not found and "installments" in cfg.change_methods:
                 ranked = sorted(eligible_options(req, options, ledger, []),
-                                key=lambda o: (o.total_payable_amount, o.first_payment_date, o.number_of_payments, o.option_number))
+                                key=lambda o: (o.total_payable_amount, o.first_payment_date, o.number_of_payments, o.option_number,
+                                               o.payment_option_id))
                 for o in ranked:
                     sched = o.schedule()
                     if sched[-1][0] > deadline:
@@ -177,17 +178,6 @@ def analyse(req: Request, ledger: Ledger, options: list[PaymentOption], cfg: Eng
                                           min_balance=low_c, safe=True))
                         found = True
                         break
-            if not found and "partial_payment" in prof.methods and req.allows_partial_payment and "partial_payment" in cfg.change_methods:
-                path_c = balance_path(ledger, items, cfg)
-                safe_c = amount_safe_today(ledger, path_c, requested)
-                e_c = earliest_full_payment_date(ledger, path_c, requested, cfg, items)
-                if Decimal(0) < safe < requested and e_c is not None and e_c <= deadline:
-                    payments = [(req.request_date, safe), (e_c, (requested - safe).quantize(CENT))]
-                    ok, low_c = plan_is_safe(ledger, items, payments, cfg)
-                    if ok:
-                        cands.append(Plan("partial_payment", payments, combo, completes_by_deadline=True, total_paid=requested,
-                                          min_balance=low_c, safe=True))
-                        found = True
             if found:
                 break  # combos are ordered by total reduction: first feasible = smallest change
 

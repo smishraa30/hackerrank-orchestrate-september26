@@ -24,9 +24,9 @@ sys.path.insert(0, os.path.join(ROOT, "code"))
 
 from buyorwait.config import EngineConfig  # noqa: E402
 from buyorwait.forecast import build_items, plan_is_safe  # noqa: E402
+from buyorwait.images import ImageExtractor  # noqa: E402
 from buyorwait.ingest import OUTPUT_COLUMNS, load_dataset  # noqa: E402
 from buyorwait.ledger import LedgerBuilder  # noqa: E402
-from buyorwait.images import ImageExtractor  # noqa: E402
 from buyorwait.models import SpendingChange  # noqa: E402
 
 STATUSES = {"affordable_now", "affordable_with_plan", "affordable_later", "not_affordable"}
@@ -98,7 +98,7 @@ def validate(output_path: str, dataset_dir: str, requests_path: str | None = Non
         if len(r) != len(OUTPUT_COLUMNS):
             errors.append(f"line {i}: expected {len(OUTPUT_COLUMNS)} columns, got {len(r)}")
             continue
-        d = dict(zip(OUTPUT_COLUMNS, r))
+        d = dict(zip(OUTPUT_COLUMNS, r, strict=True))
         if d["request_id"] in seen:
             errors.append(f"line {i}: duplicate request_id {d['request_id']}")
         seen.add(d["request_id"])

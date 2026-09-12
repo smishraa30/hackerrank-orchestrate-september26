@@ -26,6 +26,12 @@ INCLUDE = [
     ("evaluation/usage_report.md", "evaluation/usage_report.md"),
     ("evaluation/tests/conftest.py", "evaluation/tests/conftest.py"),
     ("evaluation/tests/test_engine.py", "evaluation/tests/test_engine.py"),
+    ("evaluation/tests/test_messages.py", "evaluation/tests/test_messages.py"),
+    ("evaluation/tests/test_recurrence.py", "evaluation/tests/test_recurrence.py"),
+    ("evaluation/tests/test_planner.py", "evaluation/tests/test_planner.py"),
+    ("evaluation/tests/test_validator_and_properties.py", "evaluation/tests/test_validator_and_properties.py"),
+    ("ruff.toml", "ruff.toml"),
+    ("ROADMAP.md", "ROADMAP.md"),
 ]
 EXCLUDED_DIRS = {"__pycache__", ".pytest_cache", "dataset", "media", "traces", ".git"}
 # key-shaped strings that must never appear in packaged files (assembled so this file does not match itself)

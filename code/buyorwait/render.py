@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Iterable, Optional
+from typing import Iterable
 
 from .ingest import OUTPUT_COLUMNS
 from .models import Decision

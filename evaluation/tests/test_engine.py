@@ -84,7 +84,7 @@ def test_only_flexible_permitted_categories_are_changed(mini):
     mini.monthly(2, "800", 5, R, category="rent")
     stream = mini.monthly(10, "40", 5, R, category="streaming", event_type="subscription", description="Family streaming plan",
                           flexibility="stoppable")
-    groc = mini.monthly(12, "100", 5, R, category="groceries", description="Groceries", flexibility="reducible", min_allowed="50")
+    mini.monthly(12, "100", 5, R, category="groceries", description="Groceries", flexibility="reducible", min_allowed="50")
     mini.request(amount="240", deadline="2026-03-12", allows_partial="false")
     mini.option("payment_option_1", "request_1", "full_payment", "240", 1, "2026-03-05", "", "0", "240")
     dec, ledger, an = run(mini)
@@ -113,8 +113,8 @@ def test_foreign_currency_converted_with_settlement_date_rate(mini):
     dec, ledger, an = run(mini)
     inc = [c for c in dec.trace["series"] if c["key"].startswith("income")][0]
     assert inc["currency"] == "USD"
-    from buyorwait.forecast import build_items
     from buyorwait.config import EngineConfig
+    from buyorwait.forecast import build_items
 
     items = build_items(ledger, EngineConfig())
     march = [c for c in items if c.day == date(2026, 3, 15) and c.amount > 0]

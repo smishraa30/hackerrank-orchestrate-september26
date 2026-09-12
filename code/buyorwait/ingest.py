@@ -171,7 +171,7 @@ def load_dataset(root: str) -> Dataset:
         )
         options_by_request.setdefault(opt.request_id, []).append(opt)
     for lst in options_by_request.values():
-        lst.sort(key=lambda o: o.option_number)
+        lst.sort(key=lambda o: (o.option_number, o.payment_option_id))
 
     messages_by_user: dict[str, list[Message]] = {}
     msg_path = os.path.join(root, "messages.csv")

@@ -46,7 +46,8 @@ python code/main.py --dataset /path/to/dataset --output /path/to/output.csv     
 ```bash
 python evaluation/validate_output.py               # contract checks + re-simulation of every plan (exit 0 = valid)
 python evaluation/evaluate_samples.py              # per-field accuracy on dataset/sample_requests.csv
-python -m pytest evaluation/tests -q               # synthetic unit/property tests (no real data needed)
+python -m pytest evaluation/tests -q               # 52 synthetic unit/property/validator tests (+ a sample regression guard)
+python -m ruff check code evaluation               # lint (config in ruff.toml)
 python evaluation/write_usage_report.py --usage evaluation/usage_run.json   # regenerate usage_report.md
 ```
 
@@ -115,3 +116,5 @@ IMPLEMENTATION_NOTES.md             schemas, inferred ground-truth behaviour, as
   (logged in the trace), never to an invented fact.
 - Without the cache, the VLM key or a local Tesseract install, an image-backed amount stays unresolved
   and the row is excluded from the forecast with a warning (it is never treated as zero).
+- A foreign-currency row with no supplied rate is excluded (income is never guessed); a request that
+  raises an unexpected error still gets a conservative `not_affordable` row and is listed on stderr.

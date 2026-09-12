@@ -118,7 +118,12 @@ def series_amount_on(s: Series, day: date, ledger: Ledger) -> Decimal:
             if day >= d:
                 amt = s.amount_from[d]
     if s.currency != ledger.profile.home_currency:
-        conv, _ = ledger.rates.convert(amt, day, s.currency, ledger.profile.home_currency)
+        try:
+            conv, _ = ledger.rates.convert(amt, day, s.currency, ledger.profile.home_currency)
+        except KeyError:
+            if s.direction == "credit":
+                return Decimal(0)  # unconvertible income is never invented
+            raise
         return conv
     return amt.quantize(CENT)
 
@@ -154,7 +159,7 @@ class Path:
     lows: list[Decimal]  # intraday low for each day
 
     def min_from(self, day: date) -> Decimal:
-        vals = [lo for d, lo in zip(self.days, self.lows) if d >= day]
+        vals = [lo for d, lo in zip(self.days, self.lows, strict=True) if d >= day]
         return min(vals) if vals else Decimal("Infinity")
 
 

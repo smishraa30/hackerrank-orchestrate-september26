@@ -17,8 +17,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
+from decimal import Decimal  # noqa: E402
+
 from buyorwait.config import EngineConfig  # noqa: E402
 from buyorwait.ingest import load_dataset  # noqa: E402
+from buyorwait.models import Decision  # noqa: E402
 from buyorwait.pipeline import Engine  # noqa: E402
 from buyorwait.render import write_output  # noqa: E402
 
@@ -42,9 +45,9 @@ def main(argv=None) -> int:
     t0 = time.time()
     ds = load_dataset(args.dataset)
     if args.requests:
-        from buyorwait.ingest import _read  # local helper
         # reuse the request parser through a temporary dataset view
         import csv
+
         from buyorwait.ingest import Request, parse_bool, parse_date, parse_decimal
 
         with open(args.requests, encoding="utf-8-sig", newline="") as f:
@@ -69,8 +72,16 @@ def main(argv=None) -> int:
     decisions = []
     if args.trace:
         os.makedirs(args.trace, exist_ok=True)
+    failures = []
     for i, req in enumerate(requests):
-        dec, ledger, an = engine.decide(req, with_trace=bool(args.trace))
+        try:
+            dec, ledger, an = engine.decide(req, with_trace=bool(args.trace))
+        except Exception as exc:  # never lose a row: emit the conservative fallback and report it
+            failures.append(f"{req.request_id}: {type(exc).__name__}: {exc}")
+            dec = Decision(request_id=req.request_id, amount_safe_to_pay=Decimal(0), affordability_status="not_affordable",
+                           recommended_payment_method="not_recommended", payment_plan="none",
+                           earliest_date_for_full_payment=None, spending_changes_needed="none",
+                           decision_explanation="Do not proceed: the request could not be evaluated safely from the supplied data.")
         decisions.append(dec)
         if args.trace:
             with open(os.path.join(args.trace, f"{req.request_id}.json"), "w", encoding="utf-8") as f:
@@ -81,6 +92,7 @@ def main(argv=None) -> int:
     usage = engine.meter.summary()
     usage["requests"] = len(requests)
     usage["image_extraction_warnings"] = list(engine.extractor.log)
+    usage["request_failures"] = failures
     usage["elapsed_seconds"] = round(time.time() - t0, 2)
     from datetime import datetime, timezone
     usage["timestamp"] = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -93,6 +105,8 @@ def main(argv=None) -> int:
         print(f"wrote {len(decisions)} rows to {args.output} in {usage['elapsed_seconds']}s; model calls: {usage['total']['calls']}")
         for line in engine.extractor.log:
             print("  image:", line)
+        for line in failures:
+            print("  FAILURE (fallback row written):", line, file=sys.stderr)
     return 0
 
 

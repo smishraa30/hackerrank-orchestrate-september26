@@ -1,8 +1,6 @@
 """Per-request orchestration: ledger -> forecast -> candidates -> decision."""
 from __future__ import annotations
 
-from dataclasses import asdict
-from decimal import Decimal
 from typing import Optional
 
 from .config import EngineConfig
@@ -12,7 +10,7 @@ from .ingest import Dataset
 from .ledger import Ledger, LedgerBuilder
 from .models import Decision, Request
 from .planner import Analysis, analyse, status_for
-from .render import fmt_plan_amount, render_plan
+from .render import render_plan
 
 
 class Engine:
