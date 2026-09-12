@@ -124,3 +124,15 @@ Sample metrics after calibration: status 96%, method 96%, plan 92%, earliest dat
 7. Spending changes are generated for full payment today and, if the user does not accept full payment, for the cheapest eligible instalment option (23 eval rows); the samples only show the full-payment form. Partial payment is never combined with changes (its amounts are defined change-free).
 8. Same-day ordering: end-of-day balances (calibrated on samples).
 9. Unknown-amount future expenses mentioned in messages (childcare) cannot be quantified and are not invented.
+
+## 7. Audit addendum (2026-09-13)
+
+- Unknown amounts on future debits are treated as blocking data-quality issues (conservative row); unknown
+  credits and unknown historical rows are warnings. Pending debits are reserved in full because the opening
+  balance is not net of them (samples 02, 20, 21, 22).
+- Only messages sent on/before the request date are used. Scheduled credits count only when they are confirmed
+  salary rows. A projected occurrence is dropped only when an explicit row of the same series falls on exactly the
+  same date. Monthly detection keeps one member per calendar month; month-end bills project on the last day.
+- The 180-day phase replay is applied only when a series' history spans that window. FX quantisation is
+  ROUND_HALF_UP; the stated from->to row is used, inverse pairs only as a logged fallback.
+- Full details, evidence and remaining risks: AUDIT_REPORT.md.

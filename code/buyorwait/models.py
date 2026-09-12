@@ -65,6 +65,21 @@ class Request:
     desired_completion_date: date
     allows_partial_payment: bool
     request_text: str
+    malformed: str = ""  # non-empty when the CSV row could not be parsed; the engine must not evaluate it
+
+
+@dataclass(frozen=True)
+class DataIssue:
+    """An explicit data-quality problem found while reconstructing a ledger.
+
+    severity "blocking": the forecast cannot be bounded (an unknown future debit); the engine must fall back to
+    the conservative decision. severity "warning": recorded for provenance only.
+    """
+
+    code: str
+    severity: str
+    detail: str
+    event_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

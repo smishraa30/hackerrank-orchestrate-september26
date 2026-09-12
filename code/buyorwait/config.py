@@ -51,8 +51,12 @@ class EngineConfig:
     interval_rounding: str = "round"
     # minimum interval (days) accepted for an interval series; shorter cadences are treated as one-offs
     min_interval_days: int = 2
-    # tolerance (days) to match an explicit scheduled event against a projected occurrence
-    explicit_match_days: int = 3
+    # a projected occurrence is dropped only when an explicit row of the same series falls on the same date
+    # (settlement or event date); 0 = exact match. Verified: every scheduled salary row sits on the projected day,
+    # while scheduled utility/insurance/school rows are extra one-offs that must NOT suppress the regular bill.
+    explicit_match_days: int = 0
+    # minimum confidence for an image extraction to be used as evidence (below: the row stays unknown)
+    image_min_confidence: float = 0.6
     # outlier trimming for amount estimation (ratio to median)
     outlier_hi: float = 2.5
     outlier_lo: float = 0.35

@@ -19,7 +19,7 @@ from .fx import CENT, RateTable
 from .images import ImageExtractor
 from .ingest import Dataset
 from .messages import Amendment, interpret_all
-from .models import CashItem, Event, Profile, Request, Series
+from .models import CashItem, DataIssue, Event, Profile, Request, Series
 
 NON_RECURRING_TYPES = {"refund", "investment_purchase", "investment_valuation", "investment_sale"}
 NON_RECURRING_CATEGORIES = {"windfall", "work_expense", "investment"}
@@ -35,11 +35,18 @@ class Ledger:
     minimum: Decimal
     series: list[Series]
     one_offs: list[CashItem]
-    explicit_by_key: dict[str, list[date]]
+    explicit_by_key: dict[str, list[date]]  # settlement and event dates of explicit rows per series key
     amendments: list[Amendment]
     rates: RateTable
     notes: list[str] = field(default_factory=list)
     provenance: dict = field(default_factory=dict)
+    issues: list[DataIssue] = field(default_factory=list)
+
+    @property
+    def blocked(self) -> bool:
+        """True when a future debit has an unknown amount: no forecast can be bounded, so the engine must
+        answer conservatively instead of silently ignoring the debit."""
+        return any(i.severity == "blocking" for i in self.issues)
 
     def flexible_series(self) -> list[Series]:
         """Series the user permits to stop or reduce (never protected categories)."""
@@ -131,9 +138,27 @@ class LedgerBuilder:
         home = prof.home_currency
 
         events = [self._copy(e) for e in self.ds.events_by_user.get(req.user_id, [])]
+        issues: list[DataIssue] = []
+
+        def unknown_amount(e: Event, why: str) -> None:
+            """A row whose cash amount cannot be established. Unknown *future debits* block the forecast
+            (conservative); everything else is only recorded (ignoring unknown credits is the safe direction)."""
+            future = e.status in ("pending", "scheduled") or (_sday(e) >= R)
+            if e.direction == "debit" and future and e.status not in ("cancelled", "failed", "unrealized"):
+                issues.append(DataIssue("unknown_debit_amount", "blocking", f"{e.event_id}: {why}", e.event_id))
+                notes.append(f"{e.event_id}: {why}; unknown FUTURE DEBIT -> forecast cannot be bounded (blocking)")
+            elif e.direction == "debit":
+                issues.append(DataIssue("unknown_history_amount", "warning", f"{e.event_id}: {why}", e.event_id))
+                notes.append(f"{e.event_id}: {why}; historical row excluded from recurrence statistics")
+            else:
+                issues.append(DataIssue("unknown_credit_amount", "warning", f"{e.event_id}: {why}", e.event_id))
+                notes.append(f"{e.event_id}: {why}; credit ignored (never invented)")
 
         # 1. amounts: images for blanks, then currency conversion at settlement date
         for e in events:
+            if e.amount is None and e.notes:
+                unknown_amount(e, "; ".join(e.notes))
+                continue
             if e.amount is None:
                 img = self.ds.images_by_event.get(e.event_id)
                 if img is not None:
@@ -150,23 +175,32 @@ class LedgerBuilder:
                                                "method": res.get("method"), "field_used": res.get("field_used")})
                         notes.append(f"{e.event_id}: blank amount resolved from {img.image_id} = {e.currency} {e.amount} ({res.get('field_used')})")
                     else:
-                        notes.append(f"{e.event_id}: blank amount, no usable image extraction; row excluded (never zero)")
+                        unknown_amount(e, f"blank amount and no usable extraction from {img.image_id} (never zero)")
+                        continue
                 else:
-                    notes.append(f"{e.event_id}: blank amount without image; row excluded (never zero)")
+                    unknown_amount(e, "blank amount without a linked image (never zero)")
+                    continue
             if e.amount is not None:
                 if e.currency != home:
                     try:
                         e.home_amount, fxp = self.rates.convert(e.amount, _sday(e), e.currency, home)
                     except KeyError:
-                        notes.append(f"{e.event_id}: no supplied exchange rate for {e.currency}->{home}; row excluded (never guessed)")
+                        unknown_amount(e, f"no supplied exchange rate for {e.currency}->{home} (never guessed)")
                         continue
                     prov["fx"].append({"event_id": e.event_id, "from": e.currency, "to": home, "date": str(_sday(e)),
                                        "rate": fxp, "home_amount": str(e.home_amount)})
                 else:
                     e.home_amount = e.amount.quantize(CENT)
 
-        # 2. messages -> amendments (structured facts only)
-        amendments = interpret_all(self.ds.messages_by_user.get(req.user_id, []))
+        # 2. messages -> amendments (structured facts only); only messages sent on/before the request date
+        all_msgs = self.ds.messages_by_user.get(req.user_id, [])
+        usable_msgs = [m for m in all_msgs if m.sent_at <= R]
+        for m in all_msgs:
+            if m.sent_at > R:
+                issues.append(DataIssue("future_message_ignored", "warning",
+                                        f"{m.message_id} sent {m.sent_at} after request date", None))
+                notes.append(f"{m.message_id}: sent {m.sent_at}, after the request date {R}; ignored (no look-ahead)")
+        amendments = interpret_all(usable_msgs)
         for a in amendments:
             prov["messages"].append({"message_id": a.message_id, "rule": a.rule, "kind": a.kind,
                                      "amount": str(a.amount) if a.amount is not None else None, "currency": a.currency,
@@ -178,7 +212,7 @@ class LedgerBuilder:
         # 3. classify rows by cash state
         history: list[Event] = []
         one_offs: list[CashItem] = []
-        explicit_by_key: dict[str, list[date]] = defaultdict(list)
+        explicit_by_key: dict[str, set[date]] = defaultdict(set)
         scheduled_income: list[Event] = []
         for e in events:
             if e.home_amount is None or e.direction == "non_cash":
@@ -192,7 +226,11 @@ class LedgerBuilder:
                         continue
                     history.append(e)
                 elif sd <= end:
+                    if e.direction == "credit":
+                        notes.append(f"{e.event_id}: settled credit dated after the request date; not counted until it is in the balance")
+                        continue
                     one_offs.append(CashItem(sd, self._signed(e), "settled_future", e.description, key, e.event_id))
+                    explicit_by_key[key].update({sd, _eday(e)})
                 continue
             if e.status in ("unrealized", "cancelled"):
                 continue
@@ -217,11 +255,14 @@ class LedgerBuilder:
                 continue
             if e.status == "scheduled":
                 day = max(R, sd)
-                if e.direction == "credit" and e.event_type == "income":
+                if e.direction == "credit":
+                    if not (e.event_type == "income" and e.category == "salary"):
+                        notes.append(f"{e.event_id}: scheduled non-salary credit ignored until it settles")
+                        continue
                     scheduled_income.append(e)
                 if day <= end:
                     one_offs.append(CashItem(day, self._signed(e), "scheduled", e.description, key, e.event_id))
-                    explicit_by_key[key].append(day)
+                    explicit_by_key[key].update({day, _eday(e)})
                 continue
 
         # 4. recurrence detection on settled history
@@ -250,8 +291,8 @@ class LedgerBuilder:
         return Ledger(profile=prof, request=req, start=R, end=end, balance=prof.current_available_balance,
                       minimum=prof.minimum_balance_to_keep, series=series,
                       one_offs=sorted(one_offs, key=lambda c: (c.day, c.event_id or "")),
-                      explicit_by_key=dict(explicit_by_key), amendments=amendments, rates=self.rates, notes=notes,
-                      provenance=prov)
+                      explicit_by_key={k: sorted(v) for k, v in explicit_by_key.items()}, amendments=amendments,
+                      rates=self.rates, notes=notes, provenance=prov, issues=issues)
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -318,7 +359,11 @@ class LedgerBuilder:
         amounts = [e.amount for e in members if e.currency == ccy]
         last = members[-1]
         notes: list[str] = []
-        fixed = len(amounts) >= 2 and amounts[-1] == amounts[-2]
+        # "fixed" = identical amounts (the whole history, or a new level held for the last three occurrences);
+        # two equal amounts in a row are not enough to call a variable series fixed
+        fixed = len(set(amounts)) == 1 or (len(amounts) >= 3 and len(set(amounts[-3:])) == 1)
+        if direction == "credit" and not fixed and len(amounts) >= 2 and amounts[-1] == amounts[-2]:
+            fixed = True  # salary level changes are step functions; two equal recent payrolls confirm the new level
         if direction == "credit":
             if fixed:
                 amount = amounts[-1]
@@ -355,14 +400,37 @@ class LedgerBuilder:
         cfg = self.cfg
         if len(evs) < cfg.min_occurrences:
             return None
+        import calendar as _cal
+
+        def month_end(e: Event) -> bool:
+            d = _eday(e)
+            return d.day >= _cal.monthrange(d.year, d.month)[1] - 2
+
         doms = Counter(_eday(e).day for e in evs)
         dom, _ = doms.most_common(1)[0]
-        members = [e for e in evs if abs(_eday(e).day - dom) <= 1 or (dom >= 28 and _eday(e).day >= 28)]
+        if dom >= 26 and sum(1 for e in evs if month_end(e)) * 2 >= len(evs):
+            dom = 31  # month-end bill: project on the last day of each month (clamped per month)
+            members = [e for e in evs if month_end(e)]
+        else:
+            members = [e for e in evs if abs(_eday(e).day - dom) <= 1]
+        # one occurrence per calendar month: keep the row closest to the dominant day, others are one-offs
+        by_month: dict[tuple[int, int], Event] = {}
+        med = statistics.median([e.amount for e in evs if e.amount is not None]) if evs else Decimal(0)
+
+        def rank(e: Event):  # closest to the dominant day, then closest to the group's typical amount
+            return (abs(_eday(e).day - dom), abs((e.amount or Decimal(0)) - med), e.event_id)
+
+        for e in members:
+            ym = (_eday(e).year, _eday(e).month)
+            cur = by_month.get(ym)
+            if cur is None or rank(e) < rank(cur):
+                by_month[ym] = e
+        members = sorted(by_month.values(), key=lambda e: (_eday(e), e.event_id))
         if len(members) < cfg.min_occurrences:
             return None
-        months = sorted({(_eday(e).year, _eday(e).month) for e in members})
+        months = sorted(by_month)
         span = (months[-1][0] - months[0][0]) * 12 + (months[-1][1] - months[0][1]) + 1
-        if len(months) != len(members) or len(members) / span < 0.6:
+        if len(members) / span < 0.6:
             return None
         if len(members) / len(evs) < 0.5 and len(evs) - len(members) >= 2:
             gaps = [(_eday(evs[i + 1]) - _eday(evs[i])).days for i in range(len(evs) - 1)]

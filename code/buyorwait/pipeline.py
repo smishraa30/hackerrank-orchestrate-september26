@@ -22,6 +22,8 @@ class Engine:
         self.builder = LedgerBuilder(ds, self.extractor, self.cfg)
 
     def decide(self, req: Request, with_trace: bool = False) -> tuple[Decision, Ledger, Analysis]:
+        if req.malformed:
+            raise ValueError(f"{req.request_id}: malformed request row ({req.malformed})")
         ledger = self.builder.build(req)
         options = self.ds.options_by_request.get(req.request_id, [])
         an = analyse(req, ledger, options, self.cfg)
@@ -72,6 +74,8 @@ def trace_of(req: Request, ledger: Ledger, an: Analysis) -> dict:
         ],
         "one_offs": [{"day": str(c.day), "amount": str(c.amount), "kind": c.kind, "label": c.label, "event": c.event_id} for c in ledger.one_offs],
         "notes": ledger.notes,
+        "issues": [{"code": i.code, "severity": i.severity, "event": i.event_id, "detail": i.detail} for i in ledger.issues],
+        "blocked": ledger.blocked,
         "provenance": ledger.provenance,
         "candidates": [
             {"method": p.method, "payments": [(str(d), str(a)) for d, a in p.payments], "changes": [c.render() for c in p.changes],

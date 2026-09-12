@@ -33,6 +33,8 @@ INCLUDE = [
     ("ruff.toml", "ruff.toml"),
     ("ROADMAP.md", "ROADMAP.md"),
     ("ARCHITECTURE.md", "ARCHITECTURE.md"),
+    ("AUDIT_REPORT.md", "AUDIT_REPORT.md"),
+    ("evaluation/tests/test_audit.py", "evaluation/tests/test_audit.py"),
 ]
 EXCLUDED_DIRS = {"__pycache__", ".pytest_cache", "dataset", "media", "traces", ".git"}
 # key-shaped strings that must never appear in packaged files (assembled so this file does not match itself)

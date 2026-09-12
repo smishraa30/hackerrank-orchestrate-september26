@@ -47,7 +47,7 @@ python code/main.py --set intraday=debits_first --set horizon_days=120          
 ```bash
 python evaluation/validate_output.py               # contract checks + re-simulation of every plan (exit 0 = valid)
 python evaluation/evaluate_samples.py              # per-field accuracy on dataset/sample_requests.csv
-python -m pytest evaluation/tests -q               # 52 synthetic unit/property/validator tests (+ a sample regression guard)
+python -m pytest evaluation/tests -q               # 67 synthetic unit/property/validator/audit tests (+ a sample regression guard)
 python -m ruff check code evaluation               # lint (config in ruff.toml)
 python evaluation/write_usage_report.py --usage evaluation/usage_run.json   # regenerate usage_report.md
 ```
@@ -118,5 +118,8 @@ ARCHITECTURE.md                     module-by-module architecture and data flow
   (logged in the trace), never to an invented fact.
 - Without the cache, the VLM key or a local Tesseract install, an image-backed amount stays unresolved
   and the row is excluded from the forecast with a warning (it is never treated as zero).
-- A foreign-currency row with no supplied rate is excluded (income is never guessed); a request that
-  raises an unexpected error still gets a conservative `not_affordable` row and is listed on stderr.
+- Data-quality problems are explicit (`DataIssue` in the trace, summary on stderr and in the usage JSON): an
+  unknown amount on a *future debit* (unresolved image, missing exchange rate, unparseable value) blocks the
+  forecast and yields the conservative `not_affordable` row; unknown credits are simply not counted; messages
+  sent after the request date are ignored; malformed request rows get a conservative fallback row.
+- See `AUDIT_REPORT.md` for the audit findings, verification and remaining risks.

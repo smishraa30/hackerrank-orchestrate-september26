@@ -94,9 +94,14 @@ def main(argv=None) -> int:
     if args.trace:
         os.makedirs(args.trace, exist_ok=True)
     failures = []
+    blocked = []
     for i, req in enumerate(requests):
         try:
+            if req.malformed:
+                raise ValueError(f"malformed request row: {req.malformed}")
             dec, ledger, an = engine.decide(req, with_trace=bool(args.trace))
+            if ledger.blocked:
+                blocked.append(f"{req.request_id}: " + "; ".join(x.detail for x in ledger.issues if x.severity == "blocking"))
         except Exception as exc:  # never lose a row: emit the conservative fallback and report it
             failures.append(f"{req.request_id}: {type(exc).__name__}: {exc}")
             dec = Decision(request_id=req.request_id, amount_safe_to_pay=Decimal(0), affordability_status="not_affordable",
@@ -114,6 +119,8 @@ def main(argv=None) -> int:
     usage["requests"] = len(requests)
     usage["image_extraction_warnings"] = list(engine.extractor.log)
     usage["request_failures"] = failures
+    usage["requests_blocked_by_unknown_debits"] = blocked
+    usage["dataset_warnings"] = list(ds.warnings)
     usage["elapsed_seconds"] = round(time.time() - t0, 2)
     from datetime import datetime, timezone
     usage["timestamp"] = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -128,6 +135,10 @@ def main(argv=None) -> int:
             print("  image:", line)
         for line in failures:
             print("  FAILURE (fallback row written):", line, file=sys.stderr)
+        for line in blocked:
+            print("  BLOCKED (conservative row written):", line, file=sys.stderr)
+        for line in ds.warnings:
+            print("  dataset warning:", line, file=sys.stderr)
     return 0
 
 

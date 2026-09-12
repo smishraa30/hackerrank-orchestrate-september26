@@ -27,9 +27,12 @@ def parse_decimal(text: str) -> Optional[Decimal]:
     if text == "":
         return None
     try:
-        return Decimal(text)
-    except InvalidOperation as exc:  # pragma: no cover - defensive
+        value = Decimal(text)
+    except InvalidOperation as exc:
         raise ValueError(f"bad decimal {text!r}") from exc
+    if not value.is_finite():
+        raise ValueError(f"non-finite decimal {text!r}")
+    return value
 
 
 def parse_date(text: str) -> Optional[date]:
@@ -93,23 +96,50 @@ def load_dataset(root: str) -> Dataset:
         )
 
     events: list[Event] = []
-    for r in _read(os.path.join(root, "financial_events.csv")):
+    for n, r in enumerate(_read(os.path.join(root, "financial_events.csv")), start=2):
+        eid = (r.get("event_id") or "").strip() or f"row_{n}"
+        row_notes: list[str] = []
+        try:
+            amount = parse_decimal(r.get("amount", ""))
+        except ValueError as exc:
+            amount = None
+            row_notes.append(f"unparseable amount ({exc})")
+        try:
+            event_date = parse_date(r.get("event_date", ""))
+            settlement_date = parse_date(r.get("settlement_date", ""))
+        except ValueError as exc:
+            warnings.append(f"financial_events.csv line {n} ({eid}): bad date ({exc}); row skipped")
+            continue
+        try:
+            min_allowed = parse_decimal(r.get("minimum_allowed_amount", ""))
+        except ValueError:
+            min_allowed = None
+            row_notes.append("unparseable minimum_allowed_amount ignored")
+        if not (r.get("user_id") and r.get("direction") in ("debit", "credit", "non_cash")):
+            warnings.append(f"financial_events.csv line {n} ({eid}): missing user_id/direction; row skipped")
+            continue
+        if amount is not None and amount < 0:
+            row_notes.append(f"negative amount {amount} treated as unknown")
+            amount = None
+        if row_notes:
+            warnings.append(f"financial_events.csv line {n} ({eid}): " + "; ".join(row_notes))
         events.append(
             Event(
-                event_id=r["event_id"],
+                event_id=eid,
                 user_id=r["user_id"],
-                event_type=r["event_type"].strip(),
-                description=r.get("description", "").strip(),
-                category=r["category"].strip(),
+                event_type=(r.get("event_type") or "").strip(),
+                description=(r.get("description") or "").strip(),
+                category=(r.get("category") or "").strip(),
                 direction=r["direction"].strip(),
-                amount=parse_decimal(r.get("amount", "")),
-                currency=r["currency"].strip(),
-                event_date=parse_date(r.get("event_date", "")),
-                settlement_date=parse_date(r.get("settlement_date", "")),
-                status=r["status"].strip(),
+                amount=amount,
+                currency=(r.get("currency") or "").strip(),
+                event_date=event_date,
+                settlement_date=settlement_date,
+                status=(r.get("status") or "").strip(),
                 linked_event_id=(r.get("linked_event_id") or "").strip(),
                 flexibility=(r.get("flexibility") or "fixed").strip(),
-                minimum_allowed_amount=parse_decimal(r.get("minimum_allowed_amount", "")),
+                minimum_allowed_amount=min_allowed,
+                notes=row_notes,
             )
         )
     events_by_user: dict[str, list[Event]] = {}
@@ -127,13 +157,35 @@ def load_dataset(root: str) -> Dataset:
         rates[(d, r["from_currency"].strip(), r["to_currency"].strip())] = parse_decimal(r["rate"]) or Decimal(0)
 
     def _req(r: dict) -> Request:
+        rid = (r.get("request_id") or "").strip()
+        try:
+            rd = parse_date(r.get("request_date", ""))
+            amt = parse_decimal(r.get("requested_amount", ""))
+            dl = parse_date(r.get("desired_completion_date", ""))
+            problems = []
+            if rd is None:
+                problems.append("missing request_date")
+            if amt is None or amt <= 0:
+                problems.append("missing or non-positive requested_amount")
+            if dl is None:
+                problems.append("missing desired_completion_date")
+            if (r.get("user_id") or "").strip() not in profiles:
+                problems.append("unknown user_id")
+            if problems:
+                raise ValueError("; ".join(problems))
+        except ValueError as exc:
+            warnings.append(f"requests.csv {rid or '?'}: {exc}; conservative fallback row will be written")
+            return Request(request_id=rid, user_id=(r.get("user_id") or "").strip(), request_date=date.min,
+                           request_type=(r.get("request_type") or "").strip(), requested_amount=Decimal(0),
+                           desired_completion_date=date.max, allows_partial_payment=False,
+                           request_text=r.get("request_text", ""), malformed=str(exc))
         return Request(
-            request_id=r["request_id"],
-            user_id=r["user_id"],
-            request_date=parse_date(r["request_date"]) or date.min,
-            request_type=r.get("request_type", "").strip(),
-            requested_amount=parse_decimal(r["requested_amount"]) or Decimal(0),
-            desired_completion_date=parse_date(r["desired_completion_date"]) or date.max,
+            request_id=rid,
+            user_id=r["user_id"].strip(),
+            request_date=rd,
+            request_type=(r.get("request_type") or "").strip(),
+            requested_amount=amt,
+            desired_completion_date=dl,
             allows_partial_payment=parse_bool(r.get("allows_partial_payment", "")),
             request_text=r.get("request_text", ""),
         )

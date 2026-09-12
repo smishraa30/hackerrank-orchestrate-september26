@@ -15,7 +15,7 @@ import hashlib
 import json
 import os
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 DEFAULT_CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache", "image_extractions.json")
@@ -58,8 +58,10 @@ class UsageMeter:
 
 
 class ImageExtractor:
-    def __init__(self, cache_path: str = DEFAULT_CACHE, meter: Optional[UsageMeter] = None, enable_vlm: Optional[bool] = None):
+    def __init__(self, cache_path: str = DEFAULT_CACHE, meter: Optional[UsageMeter] = None, enable_vlm: Optional[bool] = None,
+                 min_confidence: float = 0.6):
         self.cache_path = cache_path
+        self.min_confidence = min_confidence
         self.meter = meter or UsageMeter()
         self.cache: dict = {}
         if os.path.exists(cache_path):
@@ -83,8 +85,8 @@ class ImageExtractor:
         h = self.sha256(image_path)
         entry = self.cache.get(h)
         if entry and entry.get("amount") is not None:
-            return {
-                "amount": Decimal(str(entry["amount"])),
+            cached = {
+                "amount": entry["amount"],
                 "currency": entry.get("currency"),
                 "confidence": float(entry.get("confidence", 0.5)),
                 "method": "cache:" + entry.get("method", "unknown"),
@@ -93,12 +95,29 @@ class ImageExtractor:
                 "notes": entry.get("notes", ""),
                 "alternatives": entry.get("alternatives", []),
                 "sha256": h,
+                "event_id": entry.get("event_id"),
             }
+            ok, why = self.validate(cached, event_hint)
+            if ok:
+                cached["amount"] = Decimal(str(cached["amount"]))
+                return cached
+            self.log.append(f"{image_id}: cache entry rejected ({why}); treated as unresolved")
         result = None
         if self.enable_vlm:
             result = self._vlm(image_path, event_hint)
+            if result is not None:
+                ok, why = self.validate(result, event_hint)
+                if not ok:
+                    self.log.append(f"{image_id}: VLM result rejected ({why})")
+                    result = None
         if result is None:
-            result = self._ocr(image_path)
+            ocr = self._ocr(image_path)
+            if ocr is not None:
+                ok, why = self.validate(ocr, event_hint)
+                if ok:
+                    result = ocr
+                else:
+                    self.log.append(f"{image_id}: OCR candidate {ocr.get('amount')} not used ({why}); verify and add to the cache")
         if result is not None:
             result["sha256"] = h
             self.cache[h] = {
@@ -120,6 +139,27 @@ class ImageExtractor:
         else:
             self.log.append(f"{image_id}: no extraction available (cache miss, VLM disabled, OCR unavailable)")
         return result
+
+    def validate(self, res: dict, hint: dict) -> tuple[bool, str]:
+        """Extraction results are evidence, never trusted blindly: the amount must be a positive finite number,
+        the currency must match the ledger row, the cached event id (when present) must match, and the
+        confidence must reach the threshold."""
+        try:
+            amount = Decimal(str(res.get("amount")))
+        except (InvalidOperation, TypeError, ValueError):
+            return False, "amount is not numeric"
+        if not amount.is_finite() or amount <= 0:
+            return False, f"amount {amount} is not a positive finite number"
+        ccy = res.get("currency")
+        if ccy and hint.get("currency") and ccy != hint["currency"]:
+            return False, f"currency {ccy} does not match the event currency {hint['currency']}"
+        eid = res.get("event_id")
+        if eid and hint.get("event_id") and eid != hint["event_id"]:
+            return False, f"cache entry belongs to {eid}, not {hint['event_id']}"
+        conf = float(res.get("confidence", 0.0) or 0.0)
+        if conf < self.min_confidence:
+            return False, f"confidence {conf:.2f} below {self.min_confidence:.2f}"
+        return True, "ok"
 
     # -- optional providers ------------------------------------------------
     def _vlm(self, image_path: str, hint: dict) -> Optional[dict]:

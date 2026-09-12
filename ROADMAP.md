@@ -46,6 +46,11 @@ Status legend: [x] done · [ ] open · [~] partial
 - [x] CLI `--set key=value` overrides and `--version`; structured per-request assumption log (already in traces) surfaced as a summary file
 - [x] Explanation consistency check in the validator (numbers quoted in the explanation match the output fields)
 
+## Phase 4b — Engineering audit (done, see AUDIT_REPORT.md)
+- [x] P0: unknown/unconvertible future debits now block the forecast (conservative row) instead of being ignored
+- [x] P1: as-of filter for messages; exact-date scheduled/projection de-duplication; monthly detection with one-offs in the same month; month-end bills; tolerant CSV parsing; image-evidence validation; independent validator re-simulation; option-id robustness
+- [x] 15 audit tests (67 total); output changed for request_77 and request_149 only (mis-detected cadence)
+
 ## Phase 5 — Decision-policy review (open, judgement calls)
 - [x] Instalments + spending changes (23 rows) — kept (user decision)
 - [ ] `wait` plans completing after the deadline (2 rows) → `affordable_later` vs `not_affordable`

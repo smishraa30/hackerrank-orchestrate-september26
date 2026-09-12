@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 CENT = Decimal("0.01")
@@ -48,4 +48,4 @@ class RateTable:
         r, prov = self.rate(day, from_ccy, to_ccy)
         if r is None:
             raise KeyError(f"no exchange rate for {from_ccy}->{to_ccy} on {day}")
-        return (amount * r).quantize(CENT), prov
+        return (amount * r).quantize(CENT, rounding=ROUND_HALF_UP), prov

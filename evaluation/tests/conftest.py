@@ -62,13 +62,15 @@ class MiniData:
                 description="Rent", flexibility="fixed", min_allowed="", direction="debit", currency="EUR", user_id="user_1"):
         ids = []
         y, m = request_date.year, request_date.month
-        for k in range(months_before, 0, -1):
+        for k in range(months_before, -1, -1):  # includes the request month when the day is already past
             mm = m - k
             yy = y
             while mm <= 0:
                 mm += 12
                 yy -= 1
-            d = date(yy, mm, day)
+            import calendar as _cal
+
+            d = date(yy, mm, min(day, _cal.monthrange(yy, mm)[1]))  # clamp like a real month-end bill
             if d >= request_date:
                 continue
             ids.append(self.event(user_id=user_id, event_type=event_type, description=description, category=category,

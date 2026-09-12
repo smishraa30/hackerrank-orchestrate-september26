@@ -55,7 +55,7 @@ flowchart LR
 | Module | Responsibility | Fallback / safety |
 |---|---|---|
 | `fx.py` `RateTable` | Convert a foreign amount with the rate dated on its settlement date. | exact date → latest earlier → earliest later → inverse pair; missing pair raises `KeyError`, which the ledger turns into "row excluded, never guessed". Provenance string per conversion. |
-| `images.py` `ImageExtractor` | Resolve a blank amount from its PNG. | sha256-keyed cache (`code/cache/image_extractions.json`, 16 verified entries) → Anthropic vision (`BUYORWAIT_ENABLE_VLM=1` + key, metered by `UsageMeter`) → pytesseract if installed → unresolved (row excluded with a note; never zero). |
+| `images.py` `ImageExtractor` | Resolve a blank amount from its PNG. | sha256-keyed cache (`code/cache/image_extractions.json`, 16 verified entries) → Anthropic vision (`BUYORWAIT_ENABLE_VLM=1` + key, metered by `UsageMeter`) → pytesseract if installed. Every result is validated as evidence (positive finite amount, currency and event id match the row, confidence ≥ 0.6); anything else leaves the amount unknown (never zero, and a future debit then blocks the forecast). |
 | `messages.py` `interpret_message` | Turn a message into typed `Amendment` facts (salary amount/date, income stop, exclusions, one-off income, rent factor, keep-pending, retry-failed, no-ops). | Regex templates for every scenario in English and Indonesian; amounts/dates extracted structurally; unknown text → `unclassified` no-op; instruction-like content is never acted on. |
 
 ## 3. Ledger reconstruction (`ledger.py`)
@@ -63,11 +63,15 @@ flowchart LR
 `Series`, dated `CashItem` one-offs, explicit-row dates per series key, and notes/provenance.
 
 1. **Amounts** — images fill blanks; foreign rows converted at settlement date.
-2. **Amendments** — messages parsed once per user.
+2. **Amendments** — messages parsed once per user; messages sent after the request date are ignored (no look-ahead).
 3. **Cash-state classification**
    - settled before request date → history (recurrence only; already in the balance)
    - pending debit → reserved on settlement date; pending credit → ignored
-   - scheduled row → reserved/credited on its date and marked *explicit* (projection skipped within ±3 days)
+   - scheduled row → reserved on its date and marked *explicit*; a projected occurrence of the same series on
+     exactly that date (settlement or event date) is dropped; scheduled credits count only when they are
+     confirmed salary rows
+   - unknown amount on a **future debit** (unresolved image, unconvertible currency, unparseable value) → a
+     *blocking* `DataIssue`: the planner returns the conservative row instead of ignoring the debit
    - failed → ignored unless a bank message says it will be retried and no scheduled retry row exists
    - cancelled / unrealized → ignored; "Possible duplicate card charge" ignored unless a dispute message keeps it
    - own-transfer pairs (message-flagged) excluded from recurrence
@@ -83,7 +87,8 @@ flowchart LR
 - **Window**: `request_date … request_date + 90`. Monthly templates are projected only for the request month
   and the two following calendar months; interval templates and dated rows run to the end of the window.
 - **Interval phase**: the history covers the 180 days before the request; future occurrences are
-  `first_occurrence + 180 + k·interval` (the generator restarts the same phase), see notes §5b.
+  `first_occurrence + 180 + k·interval` (the generator restarts the same phase), see notes §5b — applied only
+  when the series' history actually spans that window, otherwise `last + interval`.
 - **Balance path**: end-of-day balances; income and expenses on the same day net out; a plan payment on a
   payday is funded by that day's income. Optional intraday modes exist (EXPERIMENTAL).
 - `amount_safe_today` = lowest projected balance − minimum, clamped to `[0, requested]`.
@@ -125,7 +130,8 @@ alternatives are kept as EXPERIMENTAL switches for reproducibility.
 ## 8. Evaluation & delivery (`evaluation/`)
 - `validate_output.py` — header/order, one row per request, enums, grammar, bounds, partial exactness,
   instalment ↔ option match, spending-change legality, status/method consistency, explanation consistency,
-  and a re-simulation of every recommended plan. Exit 0 = VALID.
+  an independent day-by-day re-simulation of every recommended plan and an independent recomputation of
+  `amount_safe_to_pay` / `earliest_date_for_full_payment` from the forecast items. Exit 0 = VALID.
 - `evaluate_samples.py` — per-field accuracy and mismatches on the 25 solved samples.
 - `tests/` — 52 synthetic tests (parser, recurrence, forecast, ranking, changes, validator self-tests,
   properties, regression guard).

@@ -74,12 +74,12 @@ def series_occurrences(s: Series, start: date, end: date, cfg: EngineConfig) -> 
         elif cfg.interval_anchor == "request0":
             base = start
             k0 = 0
-        elif cfg.interval_anchor == "shift" and s.first_date is not None:
-            # the forecast period repeats the observed history pattern: phase = first occurrence + shift
-            # (history window = [R - shift, R); the generator restarts the same phase offset at R)
+        elif (cfg.interval_anchor == "shift" and s.first_date is not None
+              and cfg.history_shift_days - 2 * step <= (start - s.first_date).days <= cfg.history_shift_days):
+            # The observed history covers the `history_shift_days` before the request and the truth restarts the same
+            # phase offset at the request date (verified on the solved samples). Only applied when the series'
+            # history actually spans that window; otherwise the plain last+interval continuation is used.
             shifted = s.first_date + timedelta(days=cfg.history_shift_days)
-            while shifted - start > timedelta(days=2 * step):
-                shifted -= timedelta(days=step)  # unusually long history: reduce the offset modulo the cadence
             while shifted < start:
                 shifted += timedelta(days=step)
             base = shifted
@@ -138,7 +138,7 @@ def build_items(ledger: Ledger, cfg: EngineConfig, changes: Optional[Iterable[Sp
         explicit = ledger.explicit_by_key.get(s.key, [])
         for d in series_occurrences(s, ledger.start, ledger.end, cfg):
             if any(abs((d - x).days) <= cfg.explicit_match_days for x in explicit):
-                continue  # explicit scheduled row replaces the projection
+                continue  # an explicit dated row of this series on this date replaces the projection
             amt = series_amount_on(s, d, ledger)
             ch = change_by_key.get(s.key)
             if ch is not None:

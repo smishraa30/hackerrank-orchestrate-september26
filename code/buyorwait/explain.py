@@ -68,6 +68,10 @@ def explain(req: Request, ledger: Ledger, an: Analysis, cfg: Optional[EngineConf
     safe = fmt_money(an.amount_safe, ccy)
     plan = an.chosen
     deadline = fmt_date_long(req.desired_completion_date)
+    if an.blocked_reason:
+        return (f"Do not make this payment by {deadline}. A future debit has no usable amount in the supplied data "
+                f"({an.blocked_reason.split(';')[0].strip()}), so the {mn} minimum cannot be shown to stay protected "
+                f"and no payment is recommended until the amount is confirmed.")
     f = _facts(ledger, cfg)
     income = _income_phrase(ledger, f, ccy)
     low_txt = f"{fmt_money(f['low'], ccy)} on {fmt_date_long(f['low_date'])}"

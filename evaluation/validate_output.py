@@ -16,14 +16,14 @@ import csv
 import os
 import re
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "code"))
 
 from buyorwait.config import EngineConfig  # noqa: E402
-from buyorwait.forecast import build_items, plan_is_safe  # noqa: E402
+from buyorwait.forecast import build_items  # noqa: E402
 from buyorwait.images import ImageExtractor  # noqa: E402
 from buyorwait.ingest import OUTPUT_COLUMNS, load_dataset  # noqa: E402
 from buyorwait.ledger import LedgerBuilder  # noqa: E402
@@ -118,6 +118,53 @@ def explanation_consistency(d: dict, req, prof) -> list[str]:
             method == "not_recommended" and ("safely" in low or "90 days" in low)):
         errs.append("explanation must state the minimum balance constraint")
     return errs
+
+
+def independent_walk(opening: Decimal, items, payments, start: date, end: date) -> Decimal:
+    """Plain daily balance walk: opening balance, then every item/payment on its day; returns the lowest
+    end-of-day balance in [start, end]. Deliberately written without the engine's Path/low machinery."""
+    per_day: dict[date, Decimal] = {}
+    for c in items:
+        if start <= c.day <= end:
+            per_day[c.day] = per_day.get(c.day, Decimal(0)) + c.amount
+    for d, a in payments:
+        if start <= d <= end:
+            per_day[d] = per_day.get(d, Decimal(0)) - a
+    bal = opening
+    low = opening
+    d = start
+    one = timedelta(days=1)
+    while d <= end:
+        bal += per_day.get(d, Decimal(0))
+        low = min(low, bal)
+        d += one
+    return low
+
+
+def independent_baseline(ledger, items, requested: Decimal) -> tuple[Decimal, date | None]:
+    """Change-free amount_safe_to_pay and earliest full-payment date from a plain daily walk."""
+    per_day: dict[date, Decimal] = {}
+    for c in items:
+        if ledger.start <= c.day <= ledger.end:
+            per_day[c.day] = per_day.get(c.day, Decimal(0)) + c.amount
+    days = []
+    bal = ledger.balance
+    d = ledger.start
+    one = timedelta(days=1)
+    while d <= ledger.end:
+        bal += per_day.get(d, Decimal(0))
+        days.append((d, bal))
+        d += one
+    low = min(b for _, b in days)
+    safe = max(Decimal(0), min(requested, low - ledger.minimum)).quantize(CENT)
+    earliest = None
+    for i, (d, _) in enumerate(days):
+        if any(b < ledger.minimum for _, b in days[:i]):
+            break
+        if all(b - requested >= ledger.minimum for _, b in days[i:]):
+            earliest = d
+            break
+    return safe, earliest
 
 
 def validate(output_path: str, dataset_dir: str, requests_path: str | None = None, simulate: bool = True) -> list[str]:
@@ -303,27 +350,42 @@ def validate(output_path: str, dataset_dir: str, requests_path: str | None = Non
                     errors.append(f"{pre}: reduce_to amount {amt} below minimum_allowed_amount {ev.minimum_allowed_amount}")
                 elif ev.amount is not None and amt >= ev.amount:
                     errors.append(f"{pre}: reduce_to amount {amt} is not a reduction of {ev.amount}")
-        # re-simulation of the recommended plan
-        if simulate and builder is not None and plan and method != "not_recommended":
+        # re-simulation of the recommended plan with an INDEPENDENT day-by-day walk (the engine's forecast items
+        # are reused, but none of its balance/safety arithmetic), plus an independent recomputation of the
+        # change-free amount_safe_to_pay and earliest_date_for_full_payment from those items.
+        if simulate and builder is not None:
             ledger = builder.build(req)
-            key_by_event = {s.last_event_id: s for s in ledger.series}
-            sc = []
-            for action, eid, amt in changes:
-                s = key_by_event.get(eid)
-                if s is None:
-                    for cand in ledger.series:
-                        if any(o.event_id == eid for o in cand.occurrences):
-                            s = cand
-                            break
-                if s is None:
-                    errors.append(f"{pre}: change {eid} does not map to an active recurring series")
-                    continue
-                sc.append(SpendingChange(action, eid, s.key, amt))
-            items = build_items(ledger, cfg, sc)
-            rule = cfg.plan_rule if method != "partial_payment" else cfg.earliest_rule
-            ok, low = plan_is_safe(ledger, items, plan, cfg, rule=rule)
-            if not ok:
-                errors.append(f"{pre}: re-simulated plan breaches minimum balance (low {low} < {ledger.minimum})")
+            if ledger.blocked:
+                if method != "not_recommended" or safe != 0:
+                    errors.append(f"{pre}: unknown future debit(s) in the ledger but a non-conservative row was produced")
+                continue
+            base_items = build_items(ledger, cfg)
+            ind_safe, ind_earliest = independent_baseline(ledger, base_items, req.requested_amount)
+            if abs(ind_safe - safe) > CENT:
+                errors.append(f"{pre}: amount_safe_to_pay {safe} != independently recomputed {ind_safe}")
+            ind_e = ind_earliest.isoformat() if ind_earliest else ""
+            if ind_e != earliest and not (status == "affordable_now" and ind_e == req.request_date.isoformat()):
+                errors.append(f"{pre}: earliest_date_for_full_payment {earliest!r} != independently recomputed {ind_e!r}")
+            if plan and method != "not_recommended":
+                key_by_event = {s.last_event_id: s for s in ledger.series}
+                sc = []
+                for action, eid, amt in changes:
+                    s = key_by_event.get(eid)
+                    if s is None:
+                        for cand in ledger.series:
+                            if any(o.event_id == eid for o in cand.occurrences):
+                                s = cand
+                                break
+                    if s is None:
+                        errors.append(f"{pre}: change {eid} does not map to an active recurring series")
+                        continue
+                    sc.append(SpendingChange(action, eid, s.key, amt))
+                items = build_items(ledger, cfg, sc)
+                low = independent_walk(ledger.balance, items, plan, ledger.start, ledger.end)
+                if low < ledger.minimum:
+                    errors.append(f"{pre}: re-simulated plan breaches minimum balance (low {low} < {ledger.minimum})")
+                if any(d > ledger.end for d, _ in plan):
+                    errors.append(f"{pre}: plan has a payment after the forecast window")
     return errors
 
 

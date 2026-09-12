@@ -24,6 +24,7 @@ class Analysis:
     chosen: Optional[Plan] = None
     rejected: list[str] = field(default_factory=list)
     change_options: list[dict] = field(default_factory=list)
+    blocked_reason: Optional[str] = None
 
 
 def rank_key(p: Plan):
@@ -105,6 +106,13 @@ def eligible_options(req: Request, options: list[PaymentOption], ledger: Ledger,
 def analyse(req: Request, ledger: Ledger, options: list[PaymentOption], cfg: EngineConfig) -> Analysis:
     prof = ledger.profile
     requested = req.requested_amount.quantize(CENT)
+    if ledger.blocked:
+        # An unknown future debit means no balance path can be bounded: the only safe answer is the conservative one.
+        reasons = "; ".join(i.detail for i in ledger.issues if i.severity == "blocking")
+        an = Analysis(amount_safe=Decimal(0), earliest=None, baseline_low=ledger.balance, baseline_low_date=ledger.start,
+                      blocked_reason=reasons)
+        an.rejected.append(f"all plans: forecast blocked by unknown future debit(s): {reasons}")
+        return an
     base_items = build_items(ledger, cfg)
     base_path = balance_path(ledger, base_items, cfg)
     safe = amount_safe_today(ledger, base_path, requested)
