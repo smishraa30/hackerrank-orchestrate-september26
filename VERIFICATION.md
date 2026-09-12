@@ -1,7 +1,7 @@
 # Verification procedure — Buy or Wait? submission
 
 Run every step from the repository root (`hackerrank-orchestrate-september26`). Each step lists the command,
-what to look for, and the expected value at release tag `submission-4` (commit `1837fb2` + this doc update). No network access or
+what to look for, and the expected value at release tag `submission-final`. No network access or
 API key is needed at any point.
 
 ## 0. Prerequisites and repository state
@@ -16,7 +16,7 @@ only needed for steps 2–3 (`pip install pytest ruff`).
 git status -sb && git log --oneline -1 && git tag -l
 ```
 Expected: clean tree, `main` in sync with `origin/main`, latest commit `docs: verification hashes …`, tags
-`submission-1` … `submission-4`.
+`submission-1` … `submission-4`, `submission-final`.
 
 ```bash
 git diff --stat upstream/main -- dataset
@@ -104,21 +104,21 @@ Expected: three identical hashes (`a47a3441…3f148`). Delete `run_a.csv`, `run_
 ```bash
 python evaluation/package_submission.py
 ```
-Expected: `wrote …\code.zip: 36 files, ~105 KB`.
+Expected: `wrote …\code.zip: 38 files, ~115 KB`.
 
 ```bash
 python evaluation/package_submission.py --list
 ```
 Expected: only `README.md`, `code/**` (main.py, buyorwait/*.py, cache/image_extractions.json), `evaluation/**`
 (scripts, usage_report.md, tests), `IMPLEMENTATION_NOTES.md`, `ARCHITECTURE.md`, `AUDIT_REPORT.md`,
-`ROADMAP.md`, `VERIFICATION.md`, `requirements.txt`, `ruff.toml`. No `dataset/`, `media/`, `output.csv`, traces, caches, secrets.
+`ROADMAP.md`, `VERIFICATION.md`, `DEVELOPMENT_SUMMARY.md`, `PROMPTS.md`, `requirements.txt`, `ruff.toml`. No `dataset/`, `media/`, `output.csv`, traces, caches, secrets.
 `code/cache/image_extractions.json` is the verified image-evidence store (16 amounts, sha256-keyed, no
 secrets); it is required to reproduce `output.csv`.
 
 ```bash
 sha256sum code.zip
 ```
-Expected: matches the hash recorded in the release tag message (`git show submission-4 | head`).
+Expected: matches the hash recorded in the release tag message (`git show submission-final | head`).
 
 Reproduce from a clean extraction (any temporary folder):
 
@@ -136,17 +136,25 @@ Expected: final-run timestamp, 250 requests, 0 model calls / tokens / cost, zero
 listed, no keys.
 
 ```bash
-grep -c "^## \[" log.txt && grep -c "SESSION START" log.txt && grep -ciE "sk-ant|api_key=|ANTHROPIC_API_KEY=" log.txt
+grep -c "^## \[" log.txt && grep -c "^## \[.*\] SESSION START" log.txt && grep -c "^tool=Claude Code" log.txt && grep -ciE "sk-ant|api_key=|ANTHROPIC_API_KEY=" log.txt
 ```
-Expected: entry count (14+), 2 session starts, and `0` key-shaped strings. `log.txt` is git-ignored and is the
-`chat_transcript` upload.
+Expected: entry count (21+), 2 session starts, one `tool=Claude Code` line per entry, and `0` key-shaped strings.
+`log.txt` is git-ignored and is the `chat_transcript` upload.
+
+```bash
+head -c 47161 log.txt | sha256sum
+```
+Expected: `988bc702e2dc4ad389613a6edc3b71449fd2b94cdd2d17cfc27983a648240d16` — the first 19 entries (both session
+starts and the 17 turn entries up to 2026-09-13T03:32:23+05:30) are byte-identical to the log as it stood before it
+was overwritten and restored (entries 20 and 21 document the overwrite and the restore). `PROMPTS.md` is the curated
+prompt index, not the transcript.
 
 ## 10. Remote state
 
 ```bash
 git fetch origin && git status -sb && git ls-remote --tags origin
 ```
-Expected: `main...origin/main` (in sync) and the three `submission-*` tags on GitHub.
+Expected: `main...origin/main` (in sync) and the `submission-*` tags on GitHub.
 
 ## 11. Submit
 
@@ -155,7 +163,7 @@ https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenge
 
 | Upload field | File | sha256 |
 |---|---|---|
-| `code.zip` | `code.zip` | printed by `sha256sum code.zip` after step 8 — the zip contains this file, so the value cannot be embedded here; the release tag message (`git show submission-4`) records the hash of the packaged build |
+| `code.zip` | `code.zip` | printed by `sha256sum code.zip` after step 8 — the zip contains this file, so the value cannot be embedded here; the release tag message (`git show submission-final`) records the hash of the packaged build |
 | `output.csv` | `output.csv` | `a47a3441f2ae9d7735690d5474f7d69a0b144fcfb05434eaa819435f2f83f148` |
 | `chat_transcript` | `log.txt` | changes with every logged turn — hash it right before uploading |
 

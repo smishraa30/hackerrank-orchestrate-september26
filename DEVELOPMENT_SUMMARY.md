@@ -1,7 +1,8 @@
 # Development summary — Buy or Wait? (HackerRank Orchestrate, September 2026)
 
 A clean narrative of how the submission was built, in chronological order. The full append-only
-conversation transcript is `log.txt` (uploaded as `chat_transcript`); this file condenses it.
+conversation transcript is `log.txt` (uploaded as `chat_transcript`); this file condenses it, and `PROMPTS.md`
+is a curated index of the prompts behind each phase.
 
 ## Goal
 

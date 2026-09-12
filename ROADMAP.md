@@ -63,4 +63,5 @@ Status legend: [x] done · [ ] open · [~] partial
 - [x] Rebuild `code.zip` after any code change (`python evaluation/package_submission.py`) and re-run validator + tests (done at 221cc94)
 - [ ] Upload `code.zip`, `output.csv`, `log.txt` (chat_transcript) at
       https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait/submission (manual step — artifacts final at tag `submission-final`)
-- [x] Final commit + push; tag the submitted revision (`submission-1`)
+- [x] Final commit + push; tag the submitted revision (`submission-1` … `submission-final`)
+- [x] Transcript integrity: `log.txt` restored byte-for-byte after an external overwrite (first 47161 bytes sha256 `988bc702…40d16`); curated prompts kept as `PROMPTS.md`
