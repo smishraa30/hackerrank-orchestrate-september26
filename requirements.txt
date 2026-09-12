@@ -1,0 +1,4 @@
+# Runtime: no third-party packages are required for the final run (standard library only).
+# Optional extras:
+pytest>=7
+anthropic>=0.40   # only for BUYORWAIT_ENABLE_VLM=1 (vision extraction of images missing from the cache)

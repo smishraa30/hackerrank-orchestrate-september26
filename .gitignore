@@ -1,0 +1,7 @@
+log.txt
+__pycache__/
+*.pyc
+.pytest_cache/
+traces/
+code.zip
+evaluation/usage_run.json
