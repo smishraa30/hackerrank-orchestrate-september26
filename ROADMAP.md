@@ -55,7 +55,7 @@ Status legend: [x] done · [ ] open · [~] partial
 - [ ] Optional LLM polish of `decision_explanation` behind an env flag (judged field) — only if cost/benefit is clear
 
 ## Phase 6 — Submission (open)
-- [ ] Rebuild `code.zip` after any code change (`python evaluation/package_submission.py`) and re-run validator + tests
+- [x] Rebuild `code.zip` after any code change (`python evaluation/package_submission.py`) and re-run validator + tests (done at 221cc94)
 - [ ] Upload `code.zip`, `output.csv`, `log.txt` (chat_transcript) at
       https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait/submission
-- [ ] Final commit + push; tag the submitted revision (`git tag submission-1`)
+- [x] Final commit + push; tag the submitted revision (`submission-1`)
