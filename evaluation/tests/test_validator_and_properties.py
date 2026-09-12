@@ -194,3 +194,19 @@ def test_sample_metrics_do_not_regress():
     assert rep["exact"]["earliest_date_for_full_payment"] >= 0.92
     assert rep["exact"]["spending_changes_needed"] >= 0.88
     assert rep["within_tol"]["amount_safe_to_pay"] >= 0.84
+
+
+def test_usage_report_is_written_with_lf_line_endings(tmp_path):
+    """The packaged report must not depend on the platform's default newline (release consistency)."""
+    import subprocess
+
+    usage = tmp_path / "usage.json"
+    usage.write_text('{"by_model": {}, "total": {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}, '
+                     '"requests": 3, "elapsed_seconds": 0.1, "timestamp": "2026-09-13T00:00:00+05:30"}')
+    out_csv = tmp_path / "out.csv"
+    out_csv.write_text("request_id\nr1\nr2\nr3\n")
+    report = tmp_path / "usage_report.md"
+    script = os.path.join(ROOT, "evaluation", "write_usage_report.py")
+    subprocess.run([sys.executable, script, "--usage", str(usage), "--output", str(report), "--output-csv", str(out_csv)], check=True)
+    data = report.read_bytes()
+    assert b"\r\n" not in data and b"| 0 | 0 | 0 | 0 | 0.00 |" in data

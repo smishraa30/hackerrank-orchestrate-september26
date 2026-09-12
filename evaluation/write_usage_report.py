@@ -86,7 +86,7 @@ def main(argv=None) -> int:
         with open(cache_path, encoding="utf-8") as f:
             entries = len([k for k in json.load(f) if not k.startswith("_")])
     text = render(usage, rows, entries, args.dataset)
-    with open(args.output, "w", encoding="utf-8") as f:
+    with open(args.output, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     print(f"wrote {args.output}")
     return 0
